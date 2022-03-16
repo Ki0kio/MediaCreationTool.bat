@@ -1,6 +1,7 @@
 Not just an Universal MediaCreationTool wrapper script with ingenious support for business editions,  
 <img src="preview.png">  
 A powerful yet simple windows 10 / 11 deployment automation tool as well!  
+*If you had no success launching the script so far, this latest version will most likely work*  
 
 Presets  
 -------  
@@ -23,7 +24,7 @@ Presets
 
 1-4 presets will modify created media in the following ways:  
 > _- write `auto.cmd` to run on demand from media for auto upgrade with edition switch support and skip tpm_  
-> _- write `$OEM$` folder (if it exists) with post setup tweaks like `$OEM$\$$\Setup\Scripts\setupcomplete.cmd`_  
+> _- write `$ISO$` content (if it exists) for example `$ISO$\sources\$OEM$\$$\Setup\Scripts\setupcomplete.cmd`_  
 > _- write `sources\PID.txt` to preselect edition at media boot or setup within windows (if configured)_  
 > _- write `sources\EI.cfg` to prevent product key prompt on Windows 11 consumer media (11 only)_  
 > _- write `AutoUnattend.xml` in boot.wim to enable local account on Windows 11 Home (11 only)_  
@@ -53,21 +54,23 @@ Also sets recommended setup options with least amount of issues on upgrades
 > If you need to upgrade all to the latest 10 version and only use Pro, you could rename the script as:  
 > `auto 21H2 Pro MediaCreationTool.bat`  
 > Can even add a VL / MAK / retail product key in the same way to take care of licensing differences.  
-> The script also picks up any `$OEM$` folder in the current location - for unified branding, configuration, tweaks etc.  
+> The script also picks up any `$ISO$` folder in the current location - for $OEM$ branding, configuration, tweaks etc.  
 
 
 Windows 11 and the TPM / SecureBoot / CPU / Storage setup checks  
 ----------------------------------------------------------------  
 [MediaCreationTool.bat](MediaCreationTool.bat) creates 11 media that will **automatically skip clean install checks**  
 ***Auto Upgrade*** preset, or launching `auto.cmd` from the created media will **automatically skip upgrade checks**  
-Running `setup.exe` from the created media does not bypass setup checks - use `auto.cmd` instead!  
+Running `setup.exe` from the created media is not guaranteed to bypass setup checks (it should for now)  
 To NOT add bypass to the media, use ***MCT Defaults*** preset or rename the script as `def MediaCreationTool.bat`  
 
 > Regarding the bypass method, for a more reliable and future-proof experience,  
 > clean installation is still handled via _winsetup.dll_ patching in _boot.wim_  
-> upgrade is now handled only via `auto.cmd` with the */Product Server* trick  
+> upgrade is now handled ~~only~~ via `auto.cmd` with the */Product Server* trick  
 > *Just ignore the 'Windows Server' label, please!*  
-Note that [Skip_TPM_Check_on_Dynamic_Update.cmd](bypass11/Skip_TPM_Check_on_Dynamic_Update.cmd) acts globally and **will skip upgrade checks via setup.exe**  
+> NEWS: temporarily added back my old-style 0-byte bypass as it still works on release  
+
+i: [Skip_TPM_Check_on_Dynamic_Update.cmd](bypass11/Skip_TPM_Check_on_Dynamic_Update.cmd) acts globally and **skips setup.exe upgrade checks as well**  
 
 Get 11 via Windows Update on "unsupported" hardware  
 ---------------------------------------------------  
@@ -96,7 +99,7 @@ for consumer / core media you can add a generic `EI.cfg` to the media\sources yo
 > _gvlkprofessional=W269N-WFGWX-YVC9B-4J6C9-T83GX gvlkcore=TX9XD-98N7V-6WMQ6-BX7FG-H8Q99_  
 > _gvlkenterprise=NPPR9-FWDCX-D2C8J-H872K-2YT43 gvlkeducation=NW6C2-QMPVW-D7KKK-3GKT6-VCFB2 etc._  
 
-Note that [Skip_TPM_Check_on_Dynamic_Update.cmd](bypass11/Skip_TPM_Check_on_Dynamic_Update.cmd) **will work for manual upgrade as well**  
+i: [Skip_TPM_Check_on_Dynamic_Update.cmd](bypass11/Skip_TPM_Check_on_Dynamic_Update.cmd) acts globally and **skips setup.exe upgrade checks as well**  
 _regardless of mounted iso / usb media already having a bypass added or not_  
 
 If having update issues - on any windows version  
@@ -160,4 +163,6 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
 2021.12.07: skip windows 11 upgrade checks only via auto.cmd - just ignore server label, please
 2021.12.15: fix regression with 1507-1709 not getting the correct fallback esd; fix dev '-noe' not autoclosing script
 2021.12.22: improved auto.cmd handling of mismatched OS and target edition, obey 'def', 'auto' upgrades 7 to 10, not 11
+2022.03.16: prevent launch errors when run from non-canonical paths; USBLayout progress; pickup $ISO$ dir to add on media
+            DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
 ```
