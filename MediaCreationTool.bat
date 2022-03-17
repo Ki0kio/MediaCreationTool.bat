@@ -267,7 +267,7 @@ set "PATH=%S%\Sysnative;%S%\Sysnative\windowspowershell\v1.0\;%S%\System32;%S%\S
 set "WORK=%SystemDrive%\ESD" & if not defined ROOT (set "ROOT=%CD%") else if not exist "%ROOT%\*.bat" set "ROOT=%CD%"
 mkdir "%WORK%" >nul 2>nul & attrib -R -S -H "%WORK%" >nul 2>nul & robocopy "%~dp0/" "%WORK%/" "%~nx0" >nul
 if "%~nx0" neq "%nx0%" copy /y "%WORK%\%~nx0" "%WORK%\%nx0%" >nul & del /f /q "%WORK%\%~nx0" >nul
-if not defined set start "MCT" cmd /d/x/r set "ROOT=%ROOT%" ^& call "%WORK%\%nx0%" %* set& exit
+if not defined set start "MCT" cmd /d/x/r set "ROOT=%ROOT%" ^& call "%WORK%\%nx0%" %* set& exit /b
 ::# self-echo top 1-20 lines of script
 prompt $G & (<"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set /p _=& call echo;%%_%%)) 
 ::# lean xp+ color macros by AveYo:  %<%:af " hello "%>>%  &  %<%:cf " w\"or\"ld "%>%   for single \ / " use .%|%\  .%|%/  \"%|%\"
@@ -288,7 +288,7 @@ if %PRE% equ 5 (set "PRESET=MCT Defaults" & set EDITION=& set LANGCODE=& set ARC
 if %PRE% equ 5 (goto noelevate) else set set=%MCT%.%PRE%
 
 ::# self elevate if needed for the custom presets to monitor setup progress, passing arguments and last GUI choices
-fltmc>nul || (set _=/d/x/r set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powershell -nop -c start -verb runas cmd $env:_& exit)
+fltmc>nul||(set _=/d/x/r set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powershell -nop -c start -verb runas cmd $env:_&exit /b)
 :noelevate 'MCT Defaults' does not need it, script just quits straightaway
 
 ::# cleanup Downloads\MCT workfolder and stale mount files
@@ -405,27 +405,27 @@ set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]g
 dism /cleanup-wim >nul 2>nul
 
 ::# start script-assisted MCT via powershell (to monitor setup state and take necessary action)
-set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]Assisted_MCT')[1];"
+set "0=%~f0" & powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]Assisted_MCT')[1];"
 if "Auto Upgrade" neq "%PRESET%" if %VER% geq 22000 if not defined DEF pause
 
-EXIT
+EXIT /B
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 :Assisted_MCT
 #:: unreliable processing like pausing setuphost removed; enhanced output; automation fixes; iso output path kung-fu
- $host.ui.rawui.windowtitle = "MCT $env:PRESET"; $ErrorActionPreference = 0; function prompt {'>'} 
+ $host.ui.rawui.windowtitle = "MCT $env:PRESET"; $ErrorActionPreference = 0
  [io.path]::GetTempPath(),$env:TEMP,$env:TMP |% { if ($env:ROOT -like "*$_*") {$env:ROOT=$env:WORK} } # was run from zip?
  $DRIVE = [environment]::SystemDirectory[0]; $WD = $DRIVE+':\ESD'; $WS = $DRIVE+':\$WINDOWS.~WS\Sources'; $DIR = $WS+'\Windows'
  $ESD = $null; $USB = $null; $ISO = "$env:ROOT\$env:X $env:VIS $env:MEDIA_CFG $env:MEDIA_ARCH $env:MEDIA_LANGCODE.iso"
- if ('Auto Upgrade' -eq $env:PRESET) {$ISO = [io.path]::GetTempPath() + "~temporary.iso"}
- del $ISO -force -ea 0 >''; if (test-path $ISO) {write-host ";( $ISO read-only or in use!`n" -fore 0xc; sleep 5; return}
+ if ('Auto Upgrade' -eq $env:PRESET) {$ISO = [io.path]::GetTempPath() + "~temporary.iso"}; del $ISO -force -ea 0 >''
+ if (test-path $ISO) {write-host ";( $ISO read-only or in use!`n" -fore 0xc; sleep 5; [environment]::Exit(0)}
  cd -Lit("$env:WORK\MCT")
 
 #:: workaround for version 1703 and earlier not having media selection switches
  if ($env:VER -le 15063 -and $null -ne $env:REG_EDITION) {
    $K = '"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"'; $E = $env:REG_EDITION
-   start -nonew cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg delete $K /v ProductName /reg:32 /f) >nul 2>nul"
-   start -nonew cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg delete $K /v ProductName /reg:64 /f) >nul 2>nul"
+   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg delete $K /v ProductName /reg:32 /f) >nul 2>nul"
+   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg delete $K /v ProductName /reg:64 /f) >nul 2>nul"
  }
 
 #:: setup file watcher to minimally track progress
@@ -477,7 +477,7 @@ EXIT
    } catch {} }
 
   #:: if DEF parameter used, quit without adding $ISO$, pid.txt, auto.cmd (includes 11 Setup override) to media
-   if ($null -ne $env:DEF -and 'Auto Upgrade' -ne $env:PRESET) {break :mct}
+   if ($null -ne $env:DEF -and 'Auto Upgrade' -ne $env:PRESET) {break}
 
   #:: get target $ISO or $USB from setup state file
    $ready = $false; $task = "PreDownload"; $action = "GetWebSetupUserInput"
@@ -490,13 +490,16 @@ EXIT
        $u = $a.TargetUsbDrive; if ($null -ne $u -and $u -gt 0) {$USB = [char][Convert]::ToInt32($u, 16) + ":"; $ready = $true}
      }}}} ; if ($mct.HasExited) {break :mct}; sleep -m 1000
    }
+   
+   if ($mct.HasExited) {break} # earlier detect of setup ui exit 
    if ('Auto Upgrade' -ne $env:PRESET -and $null -eq $USB) {write-host -fore Gray "Prepare", $ISO}
    if ('Auto Upgrade' -ne $env:PRESET -and $null -ne $USB) {write-host -fore Gray "Prepare", $USB}
    if ('Auto Upgrade' -eq $env:PRESET) {write-host -fore Gray "Prepare", $DIR}
    $label = "${env:X}_${env:VIS}" + ($ESD -split '(?=_client)')[1]
    $label = $label -replace '_clientconsumer','' -replace '_clientbusiness','' -replace 'fre_','_' -replace '.esd',''
    write-host -fore Gray "FromESD", $label; sleep 10; powershell -win $env:hide -nop -c ";"
-
+   if ($mct.HasExited) {break} # earlier detect of setup ui exit
+   
   #:: watch setup files progress from the sideline (MCT has authoring control)
    write-host -fore Yellow "Started ESD download"; Watcher $mct "*.esd"  $WD all >''; if ($mct.HasExited) {break}
    write-host -fore Yellow "Started media create"; Watcher $mct "*.wim"  $WS all >''; if ($mct.HasExited) {break}
@@ -559,7 +562,7 @@ EXIT
    if ($env:VER -ge 22000 -or 'Auto Upgrade' -eq $env:PRESET) {
      $mct.Kill(); $s = get-process SetupPrep,SetupHost -ea 0; if ($s) { foreach ($setup in $s) {$setup.Kill()} }
      powershell -win 0 -nop -c ";"; ShowWindow (get-process -Id $PID).MainWindowHandle 1
-     sleep 3; start -nonew cmd '/d/x/r dism /cleanup-wim >nul 2>nul'; del $ISO -force -ea 0 >''
+     sleep 3; & cmd '/d/x/r dism /cleanup-wim >nul 2>nul'; del $ISO -force -ea 0 >''
    }
 
   #:: end monitoring
@@ -569,22 +572,22 @@ EXIT
 #:: undo workaround for version 1703 and earlier not having media selection switches
  if ($env:VER -le 15063 -and $null -ne $env:REG_EDITION) {
    $K = '"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"'; $E = $env:OS_EDITION; $P = $env:OS_PRODUCT
-   start -nonew cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg add $K /v ProductName /d $P /reg:32 /f) >nul 2>nul"
-   start -nonew cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg add $K /v ProductName /d $P /reg:64 /f) >nul 2>nul"
+   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg add $K /v ProductName /d $P /reg:32 /f) >nul 2>nul"
+   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg add $K /v ProductName /d $P /reg:64 /f) >nul 2>nul"
  }
+
+#:: abort if setup was terminated earlier
+ if (-not (test-path "$DIR\sources\ws.dat")) {[environment]::Exit(0)} 
 
 #:: back to classic 0-byte skip 11 upgrade checks as it still works in release - and people keep nagging about Server label
  if ($env:VER -ge 22000) {
    new-item -itemtype file -name "$DIR\sources\appraiserres.dll" -force -ea 0 >''
  }
 
-#:: abort if setup was terminated earlier
- if (-not (test-path "$DIR\sources\ws.dat")) {return} 
-
 #:: Auto Upgrade preset starts auto.cmd from $DIR = C:\$WINDOWS.~WS\Sources\Windows
  if ('Auto Upgrade' -eq $env:PRESET) {
-   cd -Lit("$env:WORK\MCT"); start -nonew cmd "/d/x/r call auto.cmd $DIR"
-   write-host "`r`n UPGRADING $env:EDITION_SWITCH... `r`n"; sleep 7; return
+   cd -Lit("$env:WORK\MCT"); & cmd "/d/x/r call auto.cmd $DIR"
+   write-host "`r`n UPGRADING $env:EDITION_SWITCH... `r`n"; sleep 7; [environment]::Exit(0)
  }
 
 #:: skip windows 11 upgrade checks - for running setup from boot media
@@ -617,10 +620,10 @@ EXIT
    }
   #:: cleanup
    pushd -lit "$env:WORK"; start -wait "$DIR\sources\setupprep.exe" "/cleanup"
-   start -nonew cmd "/d/x/c rmdir /s /q ""$DIR"" & del /f /q ""$WS\*.*""" >''
+   & cmd "/d/x/c rmdir /s /q ""$DIR"" & del /f /q ""$WS\*.*""" >''
  }
 
- write-host "`r`nDONE`r`n"; sleep 7; return
+ write-host "`r`nDONE`r`n"; sleep 7; [environment]::Exit(0)
 #:: done #:Assisted_MCT
 
 ::--------------------------------------------------------------------------------------------------------------------------------
@@ -636,10 +639,10 @@ pushd "%dir%sources" || (echo "%dir%sources" & timeout /t 5 & exit /b)
 setlocal EnableDelayedExpansion
 
 ::# start sources\setup if under winpe (when booted from media)
-reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (start "WinPE" sources\setup.exe &exit /b)
+reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (start "WinPE" sources\setup.exe & exit /b)
 
 ::# elevate so that workarounds can be set under windows
-fltmc>nul || (set _="%~f0" %*& powershell -nop -c start -verb runas cmd \"/d/x/r call $env:_\"& exit /b)
+fltmc>nul || (set _="%~f0" %*& powershell -nop -c start -verb runas cmd \"/d/x/r call $env:_\" & exit /b)
 
 ::# undo any previous regedit edition rename (if upgrade was interrupted)
 set EI=& set PN=& set NT="HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
@@ -714,7 +717,7 @@ if "%Build%" geq "22000" if "%SKIP_11_SETUP_CHECKS%" equ "1" (set OPTIONS=%TRICK
 ::# auto upgrade with edition lie workaround to keep files and apps - all 1904x builds allow up/downgrade between them
 if defined reg call :rename %reg%
 start "auto" setupprep.exe %OPTIONS%
-exit /b
+EXIT /B
 
 :rename EditionID
 set NT="HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
