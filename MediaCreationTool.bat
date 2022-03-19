@@ -2,8 +2,8 @@
 :Universal MCT wrapper script for all Windows 10/11 versions from 1507 to 21H2!
 :: Nothing but Microsoft-hosted source links and no third-party tools; script just configures an xml and starts MCT
 :: Ingenious support for business editions (Enterprise / VL) selecting language, x86, x64 or AiO inside the MCT GUI
-:: Changelog: 2022.03.17
-:: - prevent launch errors when run from non-canonical paths; USBLayout progress; pickup $ISO$ dir to add on media
+:: Changelog: 2022.03.18
+:: - prevent more launch errors; fix Auto Upgrade regression; USBLayout progress; pickup $ISO$ dir to add on media
 :: - DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
 :: on upgrade: latest build, on offline install: 11 22000.318 / 21H2 19044.1288 / 21H1 19043.1348 / 20H2 19042.1052
 
@@ -84,7 +84,7 @@ for %%E in ( ProfessionalEducation ProfessionalEducationN ProfessionalWorkstatio
 ) do if /i %%s equ %%E set "EDITION=%%E")
 
 ::# parse LANGCODE from script name or commandline - accepts any words starting with xy-
-for %%s in (%~n0 %*) do set ".=%%~s" & for /f %%C in ('cmd /q/v:on/r echo;!.:~2^,1!') do if "%%C" equ "-" set "LANGCODE=%%s"
+for %%s in (%~n0 %*) do set ".=%%~s" & for /f %%C in ('cmd /q /v:on /c echo;!.:~2^,1!') do if "%%C" equ "-" set "LANGCODE=%%s"
 
 ::# parse ARCH from script name or commandline - no, it does not accept "both"
 for %%s in (%~n0 %*) do for %%A in (x86 x64) do if /i %%s equ %%A set "ARCH=%%A"
@@ -98,7 +98,7 @@ if defined EDITION if "%PKEY1%" equ "%PKEY28%" (set "KEY=%PKEY%") else set "PKEY
 for %%s in (%~n0 %*) do if /i %%s equ no_update set "NO_UPDATE=1"
 if defined NO_UPDATE (set OPTIONS=%OPTIONS% /DynamicUpdate Disable) else (set OPTIONS=%OPTIONS% /DynamicUpdate Enable)
 
-::# parse DEF from script name or commandline - don't add $ISO$\, PID.txt, auto.cmd, Skip TPM (if applicable) to created media
+::# parse DEF from script name or commandline - dont add $ISO$\, PID.txt, auto.cmd, Skip TPM (if applicable) to created media
 for %%s in (%~n0 %*) do if /i %%s equ def set "DEF=1"
 ::# hint: setup can run a script before logon, if present at $ISO$\sources\$OEM$\$$\Setup\Scripts\setupcomplete.cmd or OOBE.cmd
 
@@ -267,12 +267,12 @@ set "PATH=%S%\Sysnative;%S%\Sysnative\windowspowershell\v1.0\;%S%\System32;%S%\S
 set "WORK=%SystemDrive%\ESD" & if not defined ROOT (set "ROOT=%CD%") else if not exist "%ROOT%\*.bat" set "ROOT=%CD%"
 mkdir "%WORK%" >nul 2>nul & attrib -R -S -H "%WORK%" >nul 2>nul & robocopy "%~dp0/" "%WORK%/" "%~nx0" >nul
 if "%~nx0" neq "%nx0%" copy /y "%WORK%\%~nx0" "%WORK%\%nx0%" >nul & del /f /q "%WORK%\%~nx0" >nul
-if not defined set start "MCT" cmd /d/x/r set "ROOT=%ROOT%" ^& call "%WORK%\%nx0%" %* set& exit /b
+if not defined set start "MCT" cmd /d /x /c set "ROOT=%ROOT%" ^& call "%WORK%\%nx0%" %* set& exit /b
 ::# self-echo top 1-20 lines of script
 prompt $G & (<"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set /p _=& call echo;%%_%%)) 
 ::# lean xp+ color macros by AveYo:  %<%:af " hello "%>>%  &  %<%:cf " w\"or\"ld "%>%   for single \ / " use .%|%\  .%|%/  \"%|%\"
 for /f "delims=:" %%s in ('echo;prompt $h$s$h:^|cmd /d') do set "|=%%s"&set ">>=\..\c nul&set /p s=%%s%%s%%s%%s%%s%%s%%s<nul&popd"
-set "<=pushd "%public%"&2>nul findstr /c:\ /a" &set ">=%>>%&echo;" &set "|=%|:~0,1%" &set /p s=\<nul>"%public%\c"
+set "<=pushd "%appdata%"&2>nul findstr /c:\ /a" &set ">=%>>%&echo;" &set "|=%|:~0,1%" &set /p s=\<nul>"%appdata%\c"
 ::# (un)define main variables
 for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY) do set "%%s="
 for %%s in (latest_MCT.url) do if not exist %%s (echo;[InternetShortcut]&echo;URL=github.com/AveYo/MediaCreationTool.bat)>%%s
@@ -288,14 +288,14 @@ if %PRE% equ 5 (set "PRESET=MCT Defaults" & set EDITION=& set LANGCODE=& set ARC
 if %PRE% equ 5 (goto noelevate) else set set=%MCT%.%PRE%
 
 ::# self elevate if needed for the custom presets to monitor setup progress, passing arguments and last GUI choices
-fltmc>nul||(set _=/d/x/r set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powershell -nop -c start -verb runas cmd $env:_&exit /b)
+fltmc>nul||(set A=/d /x /c set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powershell -nop -c start -verb runas cmd $env:A;&exit)
 :noelevate 'MCT Defaults' does not need it, script just quits straightaway
 
 ::# cleanup Downloads\MCT workfolder and stale mount files
 mkdir "%WORK%\MCT" >nul 2>nul & attrib -R -S -H "%WORK%" /D & pushd "%WORK%\MCT"
 del /f /q products.* *.key EI.cfg PID.txt auto.cmd AutoUnattend.xml >nul 2>nul
 set /a latest=0 & if exist latest set /p latest=<latest
-echo;20220317>latest & if %latest% lss 20211116 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
+echo;20220318>latest & if %latest% lss 20211116 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
 
 ::# edition fallback to ones that MCT supports - after selection
 (set MEDIA_EDITION=%MEDIA_EDITION:Embedded=Enterprise%)
@@ -355,7 +355,7 @@ if defined CAB echo;%CAB% & call :DOWNLOAD "%CAB%" products%VID%.cab
 if exist products%VID%.xml copy /y products%VID%.xml products.xml >nul 2>nul
 if exist products%VID%.cab del /f /q products%VID%.xml >nul 2>nul
 if exist products%VID%.cab expand.exe -R products%VID%.cab -F:* . >nul 2>nul
-set "/hint=Check urls in browser | del MCT dir | use powershell v3.0+ | unblock powershell | enable BITS serv"
+set "/hint=Check urls in browser | del ESD dir | use powershell v3.0+ | unblock powershell | enable BITS serv"
 echo;& set err=& for %%s in (products.xml MediaCreationTool%VID%.exe) do if not exist %%s set err=1
 if defined err (%<%:4f " ERROR "%>>% & %<%:0f " %/hint% "%>%) else if not defined err %<%:0f " %PRESET% "%>%
 if defined err (del /f /q products%VID%.* MediaCreationTool%VID%.exe 2>nul & pause & exit /b1)
@@ -395,20 +395,20 @@ if not defined KEY (del /f /q PID.txt 2>nul) else (echo;[PID]& echo;Value=%KEY%&
 if not defined KEY if %VER% geq 22000 (echo;[Channel]& echo;_Default)>EI.cfg
 
 ::# generate auto.cmd for upgrading without prompts - also copied to media so it can be re-run on demand
-set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]generate_auto_cmd')[1];"
+set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0) -split '[:]generate_auto_cmd')[1];"
 
 ::# generate AutoUnattend.xml for enabling offline local account on 11 Home editions
 ::# gets placed inside boot.wim so that it does not affect setup under windows
-set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]generate_AutoUnattend_xml')[1];"
+set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0) -split '[:]generate_AutoUnattend_xml')[1];"
 
 ::# cleanup stale files
 dism /cleanup-wim >nul 2>nul
 
 ::# start script-assisted MCT via powershell (to monitor setup state and take necessary action)
-set "0=%~f0" & powershell -nop -c "iex ([io.file]::ReadAllText($env:0)-split'[:]Assisted_MCT')[1];"
+set "0=%~f0" & start /wait /b powershell -nop -c "iex ([io.file]::ReadAllText($env:0) -split '[:]Assisted_MCT')[1];"
 if "Auto Upgrade" neq "%PRESET%" if %VER% geq 22000 if not defined DEF pause
 
-EXIT /B
+EXIT
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 :Assisted_MCT
@@ -416,25 +416,25 @@ EXIT /B
  $host.ui.rawui.windowtitle = "MCT $env:PRESET"; $ErrorActionPreference = 0
  [io.path]::GetTempPath(),$env:TEMP,$env:TMP |% { if ($env:ROOT -like "*$_*") {$env:ROOT=$env:WORK} } # was run from zip?
  $DRIVE = [environment]::SystemDirectory[0]; $WD = $DRIVE+':\ESD'; $WS = $DRIVE+':\$WINDOWS.~WS\Sources'; $DIR = $WS+'\Windows'
- $ESD = $null; $USB = $null; $ISO = "$env:ROOT\$env:X $env:VIS $env:MEDIA_CFG $env:MEDIA_ARCH $env:MEDIA_LANGCODE.iso"
- if ('Auto Upgrade' -eq $env:PRESET) {$ISO = [io.path]::GetTempPath() + "~temporary.iso"}; del $ISO -force -ea 0 >''
+ $ESD = $null; $USB = $null; $ISO = "$envOOT\$env:X $env:VIS $env:MEDIA_CFG $env:MEDIA_ARCH $env:MEDIA_LANGCODE.iso"
+ if ('Auto Upgrade' -eq $env:PRESET) {$ISO = [io.path]::GetTempPath() + "~temporary.iso"}; del $ISO -force -ea 0 >$null
  if (test-path $ISO) {write-host ";( $ISO read-only or in use!`n" -fore 0xc; sleep 5; [environment]::Exit(0)}
  cd -Lit("$env:WORK\MCT")
 
 #:: workaround for version 1703 and earlier not having media selection switches
  if ($env:VER -le 15063 -and $null -ne $env:REG_EDITION) {
    $K = '"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"'; $E = $env:REG_EDITION
-   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg delete $K /v ProductName /reg:32 /f) >nul 2>nul"
-   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg delete $K /v ProductName /reg:64 /f) >nul 2>nul"
+   cmd /d /x /c "(reg add $K /v EditionID /d $E /reg:32 /f & reg delete $K /v ProductName /reg:32 /f) >nul 2>nul"
+   cmd /d /x /c "(reg add $K /v EditionID /d $E /reg:64 /f & reg delete $K /v ProductName /reg:64 /f) >nul 2>nul"
  }
 
 #:: setup file watcher to minimally track progress
  function Watcher {
-   $A = $args; $Exe = $A[0]; $File = $A[1]; $Dir = $A[2]; $Subdirs = @($false,$true)[$A[3] -eq 'all']
-   $P = mkdir $Dir -force -ea 0; if (!(test-path $P)) {return 1}; $W = new-object IO.FileSystemWatcher; $W.Path = $P.FullName
+   $A = $args; $Exe = $A[0]; $File = $A[1]; $Folder = $A[2]; $Subdirs = @($false,$true)[$A[3] -eq 'all']
+   $P = mkdir $Folder -force -ea 0; if (!(test-path $P)) {return 1}; $W = new-object IO.FileSystemWatcher; $W.Path = $P.FullName
    $W.Filter = $File; $W.IncludeSubdirectories = $Subdirs; $W.NotifyFilter = 125; $W.EnableRaisingEvents = $true; $ret = 1
    while ($true) {
-     try { $get = $W.WaitForChanged(15, 15000) } catch { mkdir $Dir -ea 0 >''; continue }
+     try { $get = $W.WaitForChanged(15, 15000) } catch { mkdir $Folder -ea 0 >$null; continue }
      if (-not $get.TimedOut) { write-host -fore Gray $get.ChangeType,$get.Name; $ret = 0;break} else {if ($Exe.HasExited) {break}}
    } ; $W.Dispose(); return $ret
  }
@@ -445,21 +445,21 @@ EXIT /B
  $re = $an |% { [Reflection.Assembly]::LoadWithPartialName("'$_") } ; try { & $ca } catch { & $ca }
  $cp = [Windows.Automation.AutomationElement]::ClassNameProperty
  $bt = "Button","ComboBox","Edit" |% {new-object Windows.Automation.PropertyCondition($cp, $_)}
- new-item -path function: -name "Enter" -value { $app = get-process "SetupHost" -ea 0; if ($null -ne $app)
- { [Microsoft.VisualBasic.Interaction]::AppActivate($app.Id)} ; [Windows.Forms.SendKeys]::SendWait("{ENTER}") } >''
+ $null = new-item -path function: -name "Enter" -value { $app = get-process "SetupHost" -ea 0
+ if ($null -ne $app) {[Microsoft.VisualBasic.Interaction]::AppActivate($app.Id)}; [Windows.Forms.SendKeys]::SendWait("{ENTER}") }
  $id = 0; if ('Auto USB' -ne $env:PRESET) {$id = 1}
  $sw = "ShowWindowAsync"; $dm = [AppDomain]::CurrentDomain."DefineDynami`cAssembly"(1,1)."DefineDynami`cModule"(1)
  $dt = $dm."Defin`eType"("AveYo",1179913,[ValueType]); $ptr = (get-process -pid $PID).MainWindowHandle.gettype()
- $dt."DefinePInvok`eMethod"($sw,"user`32",8214,1,[void],@($ptr,[int]),1,4) >''; $nt = $dt."Creat`eType"()
- new-item -path function: -name "ShowWindow" -value {$nt."G`etMethod"($sw).invoke(0,@($args[0],$args[1]))} >''
+ $dt."DefinePInvok`eMethod"($sw,"user`32",8214,1,[void],@($ptr,[int]),1,4) >$null; $nt = $dt."Creat`eType"()
+ new-item -path function: -name "ShowWindow" -value {$nt."G`etMethod"($sw).invoke(0,@($args[0],$args[1]))} >$null
 
 #:: start monitoring
  :mct while ($true) {
   #:: launch MCT with /Selfhost /Action CreateMedia options and wait for main window
    $set = get-process SetupHost -ea 0; if ($set) {$set.Kill()}
-   $mct = start -passthru "$env:WORK\MCT\MediaCreationTool${env:VID}.exe" $env:MAKE_OPTIONS; if ($null -eq $mct) {break}
+   $mct = start -passthru "$env:WORK\MCT\MediaCreationTool${env:VID}.exe" $env:MAKE_OPTIONS; if ($null -eq $mct) {break :mct}
    while ($null -eq (get-process SetupHost -ea 0)) {if ($mct.HasExited) {break :mct}; sleep -m 200 }
-   $set = get-process SetupHost -ea 0; if ($null -eq $set) {break}
+   $set = get-process SetupHost -ea 0; if ($null -eq $set) {break :mct}
    while ($set.MainWindowHandle -eq 0) { if ($mct.HasExited) {break :mct}; $set.Refresh(); sleep -m 200 }
 
   #:: using automation to click gui buttons directly due to UpgradeNow and CreateUpgradeMedia actions no longer working in 11 MCT
@@ -477,7 +477,7 @@ EXIT /B
    } catch {} }
 
   #:: if DEF parameter used, quit without adding $ISO$, pid.txt, auto.cmd (includes 11 Setup override) to media
-   if ($null -ne $env:DEF -and 'Auto Upgrade' -ne $env:PRESET) {break}
+   if ($null -ne $env:DEF -and 'Auto Upgrade' -ne $env:PRESET) {break :mct}
 
   #:: get target $ISO or $USB from setup state file
    $ready = $false; $task = "PreDownload"; $action = "GetWebSetupUserInput"
@@ -491,36 +491,36 @@ EXIT /B
      }}}} ; if ($mct.HasExited) {break :mct}; sleep -m 1000
    }
    
-   if ($mct.HasExited) {break} # earlier detect of setup ui exit 
+   if ($mct.HasExited) {break :mct} # earlier detect of setup ui exit 
    if ('Auto Upgrade' -ne $env:PRESET -and $null -eq $USB) {write-host -fore Gray "Prepare", $ISO}
    if ('Auto Upgrade' -ne $env:PRESET -and $null -ne $USB) {write-host -fore Gray "Prepare", $USB}
    if ('Auto Upgrade' -eq $env:PRESET) {write-host -fore Gray "Prepare", $DIR}
    $label = "${env:X}_${env:VIS}" + ($ESD -split '(?=_client)')[1]
    $label = $label -replace '_clientconsumer','' -replace '_clientbusiness','' -replace 'fre_','_' -replace '.esd',''
    write-host -fore Gray "FromESD", $label; sleep 10; powershell -win $env:hide -nop -c ";"
-   if ($mct.HasExited) {break} # earlier detect of setup ui exit
+   if ($mct.HasExited) {break :mct} # earlier detect of setup ui exit
    
   #:: watch setup files progress from the sideline (MCT has authoring control)
-   write-host -fore Yellow "Started ESD download"; Watcher $mct "*.esd"  $WD all >''; if ($mct.HasExited) {break}
-   write-host -fore Yellow "Started media create"; Watcher $mct "*.wim"  $WS all >''; if ($mct.HasExited) {break}
-   #write-host -fore Yellow "Started media layout"; Watcher $mct "ws.dat" $WS all >''; if ($mct.HasExited) {break}
+   write-host -fore Yellow "Started ESD download"; Watcher $mct "*.esd" $WD all >$null; if ($mct.HasExited) {break :mct}
+   write-host -fore Yellow "Started media create"; Watcher $mct "*.wim"  $WS all >$null; if ($mct.HasExited) {break :mct}
+   #write-host -fore Yellow "Started media layout"; Watcher $mct "ws.dat" $WS all >$null; if ($mct.HasExited) {break :mct}
 
   #:: add to media EI.cfg, PID.txt, auto.cmd, $ISO$ dir - disable via DEF arg
   #:: [issue #91] pick up $ISO$ content and add it to the root of the created media - place your $OEM$ into $ISO$\sources\$OEM$
    if ($null -eq $env:DEF) {
      pushd -lit "$env:ROOT"
-     $f1 = '$ISO$'; if (test-path $f1) {xcopy /CYBERHIQ $f1 "$DIR" >''; write-host -fore Gray "AddDirs", $f1} ; popd
+     $f1 = '$ISO$'; if (test-path $f1) {xcopy /CYBERHIQ $f1 "$DIR" >$null; write-host -fore Gray "AddDirs", $f1} ; popd
      pushd -lit "$env:WORK"
      if (-not (test-path "$DIR\auto.cmd")) {
-       $f2 = "MCT\auto.cmd"; if (test-path $f2) {copy -path $f2 -dest $DIR -force >''; write-host -fore Gray "AddFile", $f2}
+       $f2 = "MCT\auto.cmd"; if (test-path $f2) {copy -path $f2 -dest $DIR -force >$null; write-host -fore Gray "AddFile", $f2}
      }
      foreach ($P in "$DIR\x86\sources","$DIR\x64\sources","$DIR\sources") {
        if (!(test-path "$P\setupprep.exe")) {continue}
        if (-not (test-path "$DIR\EI.cfg") -and ($ESD -like '*_ret_*')) {
-         $f3 = "MCT\EI.cfg"; if (test-path $f3) {copy -path $f3 -dest $P -force >''; write-host -fore Gray "AddFile", $f3}
+         $f3 = "MCT\EI.cfg"; if (test-path $f3) {copy -path $f3 -dest $P -force >$null; write-host -fore Gray "AddFile", $f3}
        }
        if (-not (test-path "$DIR\PID.txt")) {
-         $f4 = "MCT\PID.txt"; if (test-path $f4) {copy -path $f4 -dest $P -force >''; write-host -fore Gray "AddFile", $f4}
+         $f4 = "MCT\PID.txt"; if (test-path $f4) {copy -path $f4 -dest $P -force >$null; write-host -fore Gray "AddFile", $f4}
        }
      } ; popd
    }
@@ -562,49 +562,47 @@ EXIT /B
    if ($env:VER -ge 22000 -or 'Auto Upgrade' -eq $env:PRESET) {
      $mct.Kill(); $s = get-process SetupPrep,SetupHost -ea 0; if ($s) { foreach ($setup in $s) {$setup.Kill()} }
      powershell -win 0 -nop -c ";"; ShowWindow (get-process -Id $PID).MainWindowHandle 1
-     sleep 3; & cmd '/d/x/r dism /cleanup-wim >nul 2>nul'; del $ISO -force -ea 0 >''
+     sleep 3; cmd /d /x /c "dism /cleanup-wim >nul 2>nul"; del $ISO -force -ea 0 >$null
    }
 
   #:: end monitoring
    break :mct
  }
-
 #:: undo workaround for version 1703 and earlier not having media selection switches
  if ($env:VER -le 15063 -and $null -ne $env:REG_EDITION) {
    $K = '"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"'; $E = $env:OS_EDITION; $P = $env:OS_PRODUCT
-   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:32 /f & reg add $K /v ProductName /d $P /reg:32 /f) >nul 2>nul"
-   & cmd "/d/x/r (reg add $K /v EditionID /d $E /reg:64 /f & reg add $K /v ProductName /d $P /reg:64 /f) >nul 2>nul"
+   cmd /d /x /c "(reg add $K /v EditionID /d $E /reg:32 /f & reg add $K /v ProductName /d $P /reg:32 /f) >nul 2>nul"
+   cmd /d /x /c "(reg add $K /v EditionID /d $E /reg:64 /f & reg add $K /v ProductName /d $P /reg:64 /f) >nul 2>nul"
  }
 
 #:: abort if setup was terminated earlier
- if (-not (test-path "$DIR\sources\ws.dat")) {[environment]::Exit(0)} 
+ if (-not (test-path "$DIR\sources\ws.dat1")) {[environment]::Exit(1)} 
 
 #:: back to classic 0-byte skip 11 upgrade checks as it still works in release - and people keep nagging about Server label
  if ($env:VER -ge 22000) {
-   new-item -itemtype file -name "$DIR\sources\appraiserres.dll" -force -ea 0 >''
+   new-item -itemtype file -name "$DIR\sources\appraiserres.dll" -force -ea 0 >$null
  }
 
 #:: Auto Upgrade preset starts auto.cmd from $DIR = C:\$WINDOWS.~WS\Sources\Windows
  if ('Auto Upgrade' -eq $env:PRESET) {
-   cd -Lit("$env:WORK\MCT"); & cmd "/d/x/r call auto.cmd $DIR"
-   write-host "`r`n UPGRADING $env:EDITION_SWITCH... `r`n"; sleep 7; [environment]::Exit(0)
+   cd -Lit("$env:WORK\MCT"); cmd /d /x /c "call ""$env:WORK\MCT\auto.cmd"" ""$DIR"""; sleep 7; [environment]::Exit(0)
  }
 
 #:: skip windows 11 upgrade checks - for running setup from boot media
  if ($env:VER -ge 22000 -and (test-path "$DIR\sources\boot.wim")) {
    write-host -fore Yellow "Disable boot.wim 11 setup checks"
-   rmdir "$WD\MOUNT" -re -force -ea 0; mkdir "$WD\MOUNT" -force -ea 0 >''; $winsetup = "$WD\MOUNT\sources\winsetup.dll"
+   rmdir "$WD\MOUNT" -re -force -ea 0; mkdir "$WD\MOUNT" -force -ea 0 >$null; $winsetup = "$WD\MOUNT\sources\winsetup.dll"
    dism.exe /mount-wim /wimfile:"$DIR\sources\boot.wim" /index:2 /mountdir:"$WD\MOUNT"; write-host
-   try {takeown.exe /f $winsetup /a >''; icacls.exe $winsetup /grant *S-1-5-32-544:f; attrib -R -S $winsetup; $patch = '/commit'
-     [io.file]::OpenWrite($winsetup).close()} catch {$patch = '/discard'}
+   try { takeown.exe /f $winsetup /a >$null; icacls.exe $winsetup /grant *S-1-5-32-544:f; attrib -R -S $winsetup
+     $patch = '/commit'; [io.file]::OpenWrite($winsetup).close() } catch {$patch = '/discard'}
    if ($patch -eq '/commit') { #:: an original setup override by AveYo to use when registry overrides fail (VirtualBox 5.x)
-     $b = [io.file]::ReadAllBytes($winsetup); $h = [BitConverter]::ToString($b)-replace'-'
-     $s = [BitConverter]::ToString([Text.Encoding]::Unicode.GetBytes('Module_Init_HWRequirements'))-replace'-'
+     $b = [io.file]::ReadAllBytes($winsetup); $h = [BitConverter]::ToString($b) -replace '-'
+     $s = [BitConverter]::ToString([Text.Encoding]::Unicode.GetBytes('Module_Init_HWRequirements')) -replace '-'
      $i = ($h.IndexOf($s)/2); $r = [Text.Encoding]::Unicode.GetBytes('Module_Init_GatherDiskInfo'); $l = $r.Length
      if ($i -gt 1) {for ($k=0;$k -lt $l;$k++) {$b[$i+$k] = $r[$k]}; [io.file]::WriteAllBytes($winsetup,$b)}; [GC]::Collect()
    }
    if (-not (test-path "$DIR\AutoUnattend.xml")) {
-     $f4 = "$env:WORK\MCT\AutoUnattend.xml"; if (test-path $f4) {copy -path $f4 -dest "$WD\MOUNT" -force >''}
+     $f4 = "$env:WORK\MCT\AutoUnattend.xml"; if (test-path $f4) {copy -path $f4 -dest "$WD\MOUNT" -force >$null}
    }
    dism.exe /unmount-wim /mountdir:"$WD\MOUNT" $patch; rmdir "$WD\MOUNT" -re -force -ea 0; write-host
   #:: create media
@@ -615,12 +613,12 @@ EXIT /B
    } else {
      write-host -fore Yellow "MakeISO"
      #:: if target is $ISO, load snippet then call MakeISO DIR ISO LABEL
-     iex ([io.file]::ReadAllText($env:0)-split '#\:MakeISO\:' ,3)[1]
+     iex ([io.file]::ReadAllText($env:0) -split '#\:MakeISO\:' ,3)[1]
      MakeISO $DIR $ISO $label
    }
   #:: cleanup
    pushd -lit "$env:WORK"; start -wait "$DIR\sources\setupprep.exe" "/cleanup"
-   & cmd "/d/x/c rmdir /s /q ""$DIR"" & del /f /q ""$WS\*.*""" >''
+   cmd /d /x /c "rmdir /s /q ""$DIR"" >nul 2>nul & del /f /q ""$WS\*.*"" >nul 2>nul"
  }
 
  write-host "`r`nDONE`r`n"; sleep 7; [environment]::Exit(0)
@@ -628,12 +626,12 @@ EXIT /B
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 :generate_auto_cmd $text = @"
-@echo off& set work=%1& set title= Auto Upgrade with edition switch support
+@echo off& set title= Auto Upgrade with edition switch support
 set "EDITION_SWITCH=$env:EDITION_SWITCH"
 set "SKIP_11_SETUP_CHECKS=$((0,1)[$null -eq $env:DEF])"
 set OPTIONS=$env:AUTO_OPTIONS`r`n`r`n
 "@ + @'
-pushd "%~dp0"& if defined work pushd %work%
+pushd "%~dp0"& for %%w in (%1) do pushd %%w
 for %%i in ("x86\" "x64\" "") do if exist "%%~isources\setupprep.exe" set "dir=%%~i"
 pushd "%dir%sources" || (echo "%dir%sources" & timeout /t 5 & exit /b)
 setlocal EnableDelayedExpansion
@@ -642,7 +640,7 @@ setlocal EnableDelayedExpansion
 reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (start "WinPE" sources\setup.exe & exit /b)
 
 ::# elevate so that workarounds can be set under windows
-fltmc>nul || (set _="%~f0" %*& powershell -nop -c start -verb runas cmd \"/d/x/r call $env:_\" & exit /b)
+fltmc>nul || (set _="%~f0" %*& powershell -nop -c start -verb runas cmd \"/d /x /c call $env:_\" & exit /b)
 
 ::# undo any previous regedit edition rename (if upgrade was interrupted)
 set EI=& set PN=& set NT="HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
@@ -662,7 +660,7 @@ for /f "tokens=2-3 delims=[." %%i in ('ver') do for %%s in (%%i) do set /a Versi
 
 ::# WIM_INFO w_5=wim_5th b_5=build_5th p_5=patch_5th a_5=arch_5th l_5=lang_5th e_5=edi_5th d_5=desc_5th i_5=edi_5th i_Core=index
 set "0=%~f0"& set wim=& set ext=.esd& if exist install.wim (set ext=.wim) else if exist install.swm set ext=.swm
-set snippet=powershell -nop -c iex ([io.file]::ReadAllText($env:0)-split'#[:]wim_info[:]')[1]; WIM_INFO install%ext% 0 0
+set snippet=powershell -nop -c iex ([io.file]::ReadAllText($env:0) -split '#[:]wim_info[:]')[1]; WIM_INFO install%ext% 0 0
 set w_count=0& for /f "tokens=1-7 delims=," %%i in ('"%snippet%"') do (set w_%%i=%%i,%%j,%%k,%%l,%%m,%%n,%%o& set /a w_count+=1
 set b_%%i=%%j& set p_%%i=%%k& set a_%%i=%%l& set l_%%i=%%m& set e_%%i=%%n& set d_%%i=%%o& set i_%%n=%%i& set i_%%i=%%n)
 
@@ -730,7 +728,7 @@ set NT="HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
 ) >nul 2>nul &exit /b
 
 #:WIM_INFO:# [PARAMS]: "file" [optional]Index or 0 = all  Output 0 = txt 1 = xml 2 = file.txt 3 = file.xml 4 = xml object
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#[:]WIM_INFO[:]' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#[:]WIM_INFO[:]' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;WIM_INFO %*& powershell -nop -c "%#%"& exit /b %errorcode%
 function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($true) {
   $block = 2097152; $bytes = new-object 'Byte[]' ($block); $begin = [uint64]0; $final = [uint64]0; $limit = [uint64]0
@@ -775,16 +773,35 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
    publicKeyToken="31bf3856ad364e35" versionScope="nonSxS">
     <RunSynchronous>
       <RunSynchronousCommand wcm:action="add"><Order>1</Order>
-        <Description>Home offline local account via OOBE\BYPASSNRO on every site yet literally no one credits AveYo</Description>
         <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t reg_dword /d 1 /f</Path>
+        <Description>offline local account via OOBE\BYPASSNRO on every site but literally no one credits AveYo</Description>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>2</Order>
+        <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v TargetReleaseVersion /d 1 /t reg_dword /f</Path>
+        <Description>hide unsupported nag on update settings</Description>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>3</Order>
+        <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v TargetReleaseVersionInfo /d 25H1 /f</Path>
+        <Description>hide unsupported nag on update settings - 25H1 is not a typo ;)</Description>
       </RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>
-  <settings pass="oobeSystem"><component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" language="neutral"
+  <settings pass="oobeSystem"><component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" language="neutral" 
    xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
    publicKeyToken="31bf3856ad364e35" versionScope="nonSxS">
-    <OOBE><HideOnlineAccountScreens>false</HideOnlineAccountScreens><HideLocalAccountScreen>false</HideLocalAccountScreen>
-    <HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE><ProtectYourPC>3</ProtectYourPC></OOBE><!-- Privacy opt-out -->
+    <OOBE>
+      <HideLocalAccountScreen>false</HideLocalAccountScreen><HideOnlineAccountScreens>false</HideOnlineAccountScreens>
+      <HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE><ProtectYourPC>3</ProtectYourPC>
+    </OOBE>  
+    <FirstLogonCommands>
+      <SynchronousCommand wcm:action="add"><Order>1</Order>
+        <CommandLine>reg add "HKCU\Control Panel\UnsupportedHardwareNotificationCache" /v SV1 /d 0 /t reg_dword /f</CommandLine>
+        <Description>hide unsupported nag on desktop - release</Description>
+      </SynchronousCommand><SynchronousCommand wcm:action="add"><Order>2</Order>
+        <CommandLine>reg add "HKCU\Control Panel\UnsupportedHardwareNotificationCache" /v SV2 /d 0 /t reg_dword /f</CommandLine>
+        <Description>hide unsupported nag on desktop - dev - originally shared by awuctl @ MDL</Description>
+      </SynchronousCommand>
+    </FirstLogonCommands>
   </component></settings>
 </unattend>
 
@@ -796,7 +813,7 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:MakeISO:#  [PARAMS] "directory" "file.iso" [optional]"label"
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:MakeISO\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:MakeISO\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;MakeISO %*& powershell -nop -c "%#%"& exit /b %errorcode%
 function MakeISO ($dir,$iso,$label='DVD_ROM') {if (!(test-path -Path $dir -pathtype Container)) {"[ERR] $dir"; return 1}; $code=@"
  using System; using System.IO; using System.Runtime.Interop`Services; using System.Runtime.Interop`Services.ComTypes;
@@ -823,10 +840,10 @@ function MakeISO ($dir,$iso,$label='DVD_ROM') {if (!(test-path -Path $dir -patht
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:DOWNLOAD:# [PARAMS] "url" "file" [optional]"path"
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:DOWNLOAD\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:DOWNLOAD\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;DOWNLOAD %*& powershell -nop -c "%#%"& exit /b %errorcode%
 function DOWNLOAD ($u, $f, $p = (get-location).Path) {
-  Import-Module BitsTransfer; $wc = new-object Net.WebClient; $wc.Headers.Add('user-agent','ipad')
+  $null = Import-Module BitsTransfer -ea 0; $wc = new-object Net.WebClient; $wc.Headers.Add('user-agent','ipad')
   $file = join-path $p $f; $s = 'https://'; $i = 'http://'; $d = $u.replace($s,'').replace($i,''); $https = $s+$d; $http = $i+$d
   foreach ($url in $http, $https) {
     if (([IO.FileInfo]$file).Exists) {return}; try {Start-BitsTransfer $url $file -ea 1} catch {}
@@ -839,7 +856,7 @@ function DOWNLOAD ($u, $f, $p = (get-location).Path) {
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:CHOICES:#  [PARAMS] indexvar "c,h,o,i,c,e,s"  [OPTIONAL]  default-index "title" fontsize backcolor forecolor winsize
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:CHOICES\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:CHOICES\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=&set "0=%~f0"& set 1=;CHOICES %*& (for /f %%x in ('powershell -nop -c "%#%"') do set "%1=%%x")& exit /b
 function CHOICES ($index,$choices,$def=1,$title='Choices',[int]$sz=12,$bc='MidnightBlue',$fc='Snow',[string]$win='300') {
  [void][Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); $f=new-object Windows.Forms.Form; $global:ret=''
@@ -849,12 +866,12 @@ function CHOICES ($index,$choices,$def=1,$title='Choices',[int]$sz=12,$bc='Midni
  $b.FlatStyle=0; $b.Cursor='Hand'; $b.add_Click({$global:ret=$this.Name;$f.Close()}); $f.Controls.Add($b); $bt+=$b; $i++}
  $f.Text=$title; $f.BackColor=$bc; $f.ForeColor=$fc; $f.StartPosition=4; $f.AutoSize=1; $f.AutoSizeMode=0; $f.MaximizeBox=0
  $f.AcceptButton=$bt[$def-1]; $f.CancelButton=$bt[-1]; $f.Add_Shown({$f.Activate();$bt[$def-1].focus()})
- $f.ShowDialog() >''; $index=$global:ret; if ($index -eq $ch.length) {return 0} else {return $index}
+ $f.ShowDialog() >$null; $index=$global:ret; if ($index -eq $ch.length) {return 0} else {return $index}
 } #:CHOICES:#  gui dialog with inverted focus returning selected index - lean and mean snippet by AveYo, 2018 - 2021
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:CHOICES2:#  [INTERNAL]
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:CHOICES2\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:CHOICES2\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=&set "0=%~f0"&set 1=;CHOICES2 %*&(for /f "tokens=1,2" %%x in ('powershell -nop -c "%#%"')do set %1=%%x&set %5=%%y)&exit /b
 function CHOICES2 {iex($f0-split '#\:CHOICES\:' ,3)[1]; function :LOOP { $a=$args
  $c1 = @($a[0], $a[1], $a[2], $a[3],  $a[-4], $a[-3], $a[-2], $a[-1]); $r1= CHOICES @c1; if ($r1 -lt 1) {return "0 0"}
@@ -865,8 +882,8 @@ function CHOICES2 {iex($f0-split '#\:CHOICES\:' ,3)[1]; function :LOOP { $a=$arg
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:PRODUCTS_XML:#  [INTERNAL]    refactored with less looping over Files; addressed more powershell 2.0 quirks
-set ^ #=$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:PRODUCTS_XML\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
-set ^ #=& set "0=%~f0"& set 1=;PRODUCTS_XML %*& powershell -nop -c "%#%"& exit /bat/ps1
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:PRODUCTS_XML\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1';iex($0+$1)
+set ^ #=& set "0=%~f0"& set 1=;PRODUCTS_XML %*& powershell -nop -c "%#%"& exit /b
 function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[Text.Encoding]::UTF8); $root = $null
  $eulas = 0; $langs = 0; $ver = $env:VER; $vid = $env:VID; $X = $env:X; if ($X-eq'11') {$vid = "11 $env:VIS"}
  $url = "http://b1.download.windowsupdate.com/"
@@ -875,7 +892,7 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
    $xml.MCT.Catalogs.Catalog.version = $env:CC; $root = $xml.SelectSingleNode('/MCT/Catalogs/Catalog/PublishedMedia')
  } else {
    $temp = [xml]('<?xml version="1.0" encoding="UTF-8"?><MCT><Catalogs><Catalog version="' + $env:CC + '"/></Catalogs></MCT>')
-   $temp.SelectSingleNode('/MCT/Catalogs/Catalog').AppendChild($temp.ImportNode($xml.PublishedMedia,$true)) >''
+   $temp.SelectSingleNode('/MCT/Catalogs/Catalog').AppendChild($temp.ImportNode($xml.PublishedMedia,$true)) >$null
    $xml = $temp; $root = $xml.SelectSingleNode('/MCT/Catalogs/Catalog/PublishedMedia')
  }
  foreach ($l in $root.ChildNodes) {if ($l.LocalName -eq 'EULAS') {$eulas = 1}; if ($l.LocalName -eq 'Languages') {$langs = 1} }
@@ -888,7 +905,7 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
      $i = $el.AppendChild($node.Clone()); $lc = $lang.LanguageCode
      $i.LanguageCode = $lc; $i.URL = $eula + $lc.ToUpperInvariant() + '_6.27.16.rtf'
    }
-   $root.AppendChild($el) >''
+   $root.AppendChild($el) >$null
  }
 #:: friendlier version + combined consumer editions label (not doing it for business too here as it would be ignored by mct)
  if ($langs -eq 1) {
@@ -903,14 +920,14 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
  $root.Files.File | & { process {
    $_arch = $_.Architecture; $_lang = $_.LanguageCode; $_edi = $_.Edition; $_loc = $_.Edition_Loc; $ok = $true
   #:: clear ARM64 and %BASE_CHINA% entries to simplify processing - TODO: ARM support
-   if ($_arch -eq 'ARM64' -or ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%')) {$root.Files.RemoveChild($_) >''; return}
+   if ($_arch -eq 'ARM64' -or ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%')) {$root.Files.RemoveChild($_) >$null; return}
   #:: unhide combined business editions in xml that include them: 1709 - 21H1; unhide Education on 1507 - 1511; better label
    if ($env:UNHIDE_BUSINESS -ge 1) {
      if ($_edi -eq 'Enterprise' -or $_edi -eq 'EnterpriseN') {$_.IsRetailOnly = 'False'; $_.Edition_Loc = $BUSINESS}
      if ($ver -le 15063 -and ($_edi -eq 'Education' -or $_edi -eq 'EducationN')) {$_.IsRetailOnly = 'False'} #:: 1511
    }
  }}
- $lines = ([io.file]::ReadAllText($env:0)-split':PS_INSERT_BUSINESS_CSV\:')[1]; $insert = $false
+ $lines = ([io.file]::ReadAllText($env:0) -split':PS_INSERT_BUSINESS_CSV\:')[1]; $insert = $false
  if ($null -ne $lines -and $env:INSERT_BUSINESS -ge 1 -and 19043,19042,19041,18363,15063,14393 -contains $ver) {
    $csv = ConvertFrom-CSV -Input $lines.replace('sr-rs','sr-latn-rs') | & { process { if ($_.Ver -eq $ver) {$_} } }
    $edi = @{ent='Enterprise';enN='EnterpriseN';edu='Education';edN='EducationN';clo='Cloud';clN='CloudN';
@@ -933,7 +950,7 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
        $name = $env:CB + $cli + $arch + 'FRE_' + $lang; $c.Edition_Loc = "$vid $BUSINESS"
        $c.FileName = $name + '.esd'; $c.Size = $_size; $c.Sha1 = $_sha1
        $c.FilePath = $url + $_dir + $up + $env:CT + $name.ToLowerInvariant() + '_' + $_sha1 + '.esd'
-       $root.Files.AppendChild($c) >''
+       $root.Files.AppendChild($c) >$null
      }}}
    }
  }
@@ -947,7 +964,7 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
        $arch = $_.Architecture; $lang = $_.LanguageCode; $item = $items["$chan, $lang"]; if ($null -eq $item) {return}
        if ($arch -eq 'x64')     {$_size = $item[0].Size_x64; $_sha1 = $item[0].Sha1_x64; $_dir = $item[0].Dir_x64}
        elseif ($arch -eq 'x86') {$_size = $item[0].Size_x86; $_sha1 = $item[0].Sha1_x86; $_dir = $item[0].Dir_x86}
-       if ('' -eq $_size) {$root.Files.RemoveChild($_) >''; return}
+       if ('' -eq $_size) {$root.Files.RemoveChild($_) >$null; return}
        $name = $env:CB + $cli + $chan.ToUpperInvariant() + '_' + $arch + 'FRE_' + $_.LanguageCode
        $_.FileName = $name + '.esd'; $_.Size = $_size; $_.Sha1 = $_sha1
        $_.FilePath = $url + $_dir + '/upgr/' + $env:CT + $name.ToLowerInvariant() + '_' + $_sha1 + '.esd'
@@ -964,13 +981,13 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
      if ($_.Edition -eq $source) {
        foreach ($s in $clone) {
          $c = $_.Clone(); if ($c.HasAttribute('id')) {$c.RemoveAttribute('id')}
-         $c.IsRetailOnly='False'; $c.Edition=$s; $root.Files.AppendChild($c) >''
+         $c.IsRetailOnly='False'; $c.Edition=$s; $root.Files.AppendChild($c) >$null
        }
      }
      elseif ($_.Edition -eq $sourceN) {
        foreach ($s in $cloneN) {
          $c = $_.Clone(); if ($c.HasAttribute('id')) {$c.RemoveAttribute('id')}
-         $c.IsRetailOnly='False'; $c.Edition=$s; $root.Files.AppendChild($c) >''
+         $c.IsRetailOnly='False'; $c.Edition=$s; $root.Files.AppendChild($c) >$null
        }
    }}}
  }
